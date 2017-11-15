@@ -1,0 +1,132 @@
+package com.johnmeehan;
+
+import sun.misc.BASE64Decoder;
+
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.math.BigInteger;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+
+public class 3DESede {
+
+
+    public static void main(String[] args) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException, IOException {
+
+        String encyrptedString = "6t8Z5bKl5ybJL+MiFerNBmiTDS7wlTEUdWNwJJApWmQ=";
+        ArrayList<String> storeBinary = new ArrayList<>();
+
+        //This block will create our XY: XY+1 .. FF: FF
+        int len = (int) Math.pow(2, 8);
+        for(int count = 0; count<len; count++) {
+            String d = Integer.toBinaryString(count);
+            while(d.length() < 8) {
+                d = "0" + d;
+            }
+            //run binary addtion two each string possibility
+            String s2 = d + binaryAddition(d, "00000001") + binaryAddition(d, "00000010") +
+                    binaryAddition(d, "00000011") + binaryAddition(d, "00000100") +
+                    binaryAddition(d, "00000101") + "1111111111111111";
+            if(s2.length() <= 64) {
+                storeBinary.add(s2);
+            }
+        }
+
+        //these are the 5 cases where we have FF + 1 which we treat as 00.. easier to just hardcode in
+        storeBinary.add("1111101111111100111111011111111011111111000000001111111111111111");
+        storeBinary.add("1111110011111101111111101111111100000000000000011111111111111111");
+        storeBinary.add("1111110111111110111111110000000000000001000000101111111111111111");
+        storeBinary.add("1111111011111111000000000000000100000010000000111111111111111111");
+        storeBinary.add("1111111100000000000000010000001000000011000001001111111111111111");
+
+        //run through every combination in "storeBinary"
+        for(int i = 0; i<storeBinary.size(); i++) {
+
+            for (int j = 0; j < storeBinary.size(); j++) {
+
+                //append CA:FE:BA .. FF to our storebinary @ every index
+                String keyInBinary = "1100101011111110101110101011111011111111111111111111111111111111" + storeBinary.get(i) + storeBinary.get(j);
+
+                //System.out.println(keyInBinary);
+                //convert binary string to byte array
+                byte[] keyInBytes = getByteByString(keyInBinary);
+                //convert byte[] array to DESede key
+                SecretKeySpec key = new SecretKeySpec(keyInBytes, "DESede");
+
+                Cipher cipher = Cipher.getInstance("DESede/ECB/NoPadding");
+                cipher.init(Cipher.DECRYPT_MODE,key);
+                BASE64Decoder base64Decoder = new BASE64Decoder();
+
+                //base64 decode your encrypted text
+                byte[] decoded = base64Decoder.decodeBuffer(encyrptedString);
+
+                //decrypted the byte[] decoded
+                byte[] decrypted = cipher.doFinal(decoded);
+
+                //write lines that contain the most common english digrphs to a text file
+                String check = (new String(decrypted, "ASCII"));
+                if(check.contains("the")){
+                    System.out.println("PlainText : " + check + "\nWith key: " + (new BigInteger(keyInBinary, 2).toString(16)));
+                }
+            }
+        }
+    }
+
+
+    //adds two binary strings.
+    public static String binaryAddition(String s1, String s2) {
+        if (s1 == null || s2 == null) return "";
+        int first = s1.length() -1;
+        int second = s2.length() -1;
+        StringBuilder sb = new StringBuilder();
+        int carry = 0;
+        while (first >= 0 || second >= 0) {
+            int sum = carry;
+            if (first >= 0) {
+                sum += s1.charAt(first) - '0';
+                first--;
+            }
+            if (second >= 0) {
+                sum += s2.charAt(second) - '0';
+                second--;
+            }
+            carry = sum >> 1;
+            sum = sum & 1;
+            sb.append(sum == 0 ? '0' : '1');
+        }
+        if(carry > 0) {
+            sb.append('1');
+        }
+        sb.reverse();
+        return String.valueOf(sb);
+    }
+
+    //convers a binary string into a byte array. converts every 8 bits into a byte
+    public static byte[] getByteByString(String binaryString) {
+        int splitSize = 8;
+
+        if(binaryString.length() % splitSize == 0){
+            int index = 0;
+            int position = 0;
+
+            byte[] resultByteArray = new byte[binaryString.length()/splitSize];
+            StringBuilder text = new StringBuilder(binaryString);
+
+            while (index < text.length()) {
+                String binaryStringChunk = text.substring(index, Math.min(index + splitSize, text.length()));
+                Integer byteAsInt = Integer.parseInt(binaryStringChunk, 2);
+                resultByteArray[position] = byteAsInt.byteValue();
+                index += splitSize;
+                position ++;
+            }
+            return resultByteArray;
+        }
+        else{
+            System.out.println("Cannot convert binary string to byte[], because of the input length. '" +binaryString+"' % 8 != 0");
+            return null;
+        }
+    }
+}
